@@ -103,8 +103,9 @@ code does not exist yet, so this tests the command, not the result:
 
 ## 3. Run the executor
 
-From the top-level directory, run the EXECUTOR with the Bash tool and
-`run_in_background: true`. dsh-vm clones the repo (with `.handoff/`) into a new run dir,
+From the top-level directory, run the EXECUTOR with the Bash tool,
+`run_in_background: true` and `timeout: 6000000` (100 minutes: dsh-vm stops the VM itself at 90,
+and the Bash tool's default background limit of 30 minutes would kill a long run early). dsh-vm clones the repo (with `.handoff/`) into a new run dir,
 prints its path first, and writes dsh's output to `<run dir>/.handoff/last-run.log`:
 
     dsh-vm run "Implement .handoff/plan.md exactly as written. Before you finish, write .handoff/report.md listing files changed, commands run and their results, anything you could not do, and the exact next step. If a step is wrong or impossible, stop and report instead of improvising. Do not commit, push, or switch branches. If the plan's Parallel work section lists workstreams, delegate each one to a teammate or subagent with your agent-team or subagent tools, give each only its own files, wait for all of them, then run the integration step yourself; say in the report which workstreams were delegated."
@@ -120,6 +121,8 @@ directory), not in the repo:
 
 - Read `<run dir>/.handoff/report.md`. If it is missing, read the end of
   `<run dir>/.handoff/last-run.log`.
+- If the output says `timed out after N minutes`, the VM was stopped mid-run: say so first in
+  the report, and treat the run dir as partial work.
 - Run `git status --porcelain` and `git diff --stat` to see what actually changed.
 - Run each **Acceptance** command from the plan and compare against its expected result.
 - Review the code: read the full `git diff` and every new untracked file (`git diff` does

@@ -99,10 +99,26 @@ dsh-vm build                              # rebuild the image (new dsh, edited p
 |---|---|---|
 | `DSH_VM_MEMORY` | `2g` | VM memory cap (unused memory goes back to the host) |
 | `DSH_VM_CPUS` | `2` | CPU-time quota (the guest still sees every core) |
+| `DSH_VM_TIMEOUT_MIN` | `90` | The VM is stopped after this many minutes; the log says it timed out |
 | `DSH_VM_RUNTIME` | `krun` | `crun` runs it as a plain container, for debugging |
 | `DSH_VM_IMAGE` | `localhost/dsh-vm:latest` | |
 | `DSH_VM_RUNS` | `~/.cache/dsh-vm/runs` | Where run dirs go; `apply`/`clean` refuse anything else |
 | `DSH_VM_NPM_CACHE` | `dsh-vm-npm` | Podman volume for npm's download cache (`podman volume rm dsh-vm-npm` to reset) |
+
+## Updating
+
+| What | How |
+|---|---|
+| This repo (script, skill, image recipe) | `cd ~/code/dsh-vm && git pull`, then the two lines below |
+| The skill | `cp -r skills/handoff ~/.claude/skills/` (start a new Claude Code session to load it) |
+| The image | `bin/dsh-vm build` (only needed when `image/` changed) |
+| dsh | Bump `ARG DSH_VERSION` in `image/Containerfile`, then `bin/dsh-vm build`. Or try one without editing: `bin/dsh-vm build --build-arg DSH_VERSION=<version>`. Versions: `npm view @deepseek-ai/dsh versions` |
+| Fedora packages and Chromium | `bin/dsh-vm build --no-cache` (a plain build reuses the cached dnf layer) |
+| The dsh profile (model, reasoning, bundles) | Edit `image/cordis.patch.yml` or `image/package.json`, then `bin/dsh-vm build` |
+| libkrun / crun-krun | Host packages: `sudo dnf upgrade` |
+
+`dsh-vm build` removes the dangling image layers it leaves behind. To reset the npm cache:
+`podman volume rm dsh-vm-npm`.
 
 ## Resources
 

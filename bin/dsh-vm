@@ -15,6 +15,7 @@ IMAGE=${DSH_VM_IMAGE:-localhost/dsh-vm:latest}
 RUNTIME=${DSH_VM_RUNTIME:-krun}          # set to runc/crun to run as a plain container
 MEMORY=${DSH_VM_MEMORY:-2g}
 CPUS=${DSH_VM_CPUS:-2}
+TIMEOUT_MIN=${DSH_VM_TIMEOUT_MIN:-90}    # the VM is killed after this many minutes
 RUNS=${DSH_VM_RUNS:-${XDG_CACHE_HOME:-$HOME/.cache}/dsh-vm/runs}
 # npm's download cache, kept between runs so `npm ci` doesn't fetch everything again. npm checks
 # every package's hash, so one run can't poison it for the next.
@@ -45,12 +46,16 @@ cmd_run() {
   rm -f -- "$dir/.handoff/report.md" "$dir/.handoff/last-run.log"
 
   echo "$dir"
-  local status=0
+  local status=0 started=$SECONDS
   podman run --rm --runtime "$RUNTIME" --memory "$MEMORY" --cpus "$CPUS" \
-    --name "dsh-vm-$(basename -- "$dir")" \
+    --timeout "$((TIMEOUT_MIN * 60))" --name "dsh-vm-$(basename -- "$dir")" \
     -e DEEPSEEK_API_KEY -v "$dir:/work:Z" -v "$NPM_CACHE:/root/.npm" -w /work "$IMAGE" \
     dsh --profile headless --permission-mode danger-full-access "$prompt" \
     >"$dir/.handoff/last-run.log" 2>&1 || status=$?
+  if (( status != 0 && SECONDS - started >= TIMEOUT_MIN * 60 )); then
+    echo "dsh-vm: timed out after $TIMEOUT_MIN minutes; the VM was stopped" \
+      | tee -a "$dir/.handoff/last-run.log"
+  fi
   echo "dsh-vm: exited $status; log in $dir/.handoff/last-run.log"
   return "$status"
 }
