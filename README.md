@@ -29,10 +29,21 @@ Claude Code (host) ── reviews the diff in the run dir, runs Acceptance there
 | A clone of the repo (with `.handoff/`) | Your real checkout and its `.git` |
 | `DEEPSEEK_API_KEY` | SSH keys, `gh` token, any git remote: **it cannot push** |
 | The network (DeepSeek API, npm, web) | Your home directory and the rest of the host |
-| Node 24, git, headless Chromium, npm installs | The host kernel (libkrun gives the VM its own) |
+| The npm download cache (a podman volume) | The host kernel (libkrun gives the VM its own) |
 
 The clone uses `--no-hardlinks`, so the VM can't modify your repo's object files through shared
 inodes. The key is the one secret inside; use a spend-capped key.
+
+dsh runs as **root** inside the VM, so it can `dnf install` whatever a task needs. Under rootless
+Podman that root is your own unprivileged user on the host, and files it writes come back owned
+by you. (sudo would not work anyway: under krun the image reaches the VM over virtiofs, where
+setuid binaries don't get root.) Chromium runs with `--no-sandbox`, since the VM is the sandbox.
+
+## What's in the image
+
+Fedora 45 with: Node 24 (npm, plus pnpm and yarn via corepack), dsh, git, headless Chromium,
+gcc/g++/make for native modules, python3, ripgrep, fd, jq, curl, unzip/tar/xz, patch, less,
+file, tree. Anything else: dsh can `dnf install` it during the run.
 
 ## Why libkrun, not Firecracker
 
@@ -45,24 +56,35 @@ and takes an ordinary container image via `podman --runtime krun`.
 
 - Linux with KVM (`/dev/kvm`), rootless Podman, and `crun-krun` (Fedora: `sudo dnf install crun-krun`)
 - `DEEPSEEK_API_KEY` in the environment Claude Code runs in
-- The [cc_to_dsh](https://github.com/stansz/cc_to_dsh) handoff skill (this adds a VM variant next to it)
 
 ## Install
 
 ```bash
 git clone https://github.com/stansz/dsh-vm ~/code/dsh-vm
 cd ~/code/dsh-vm
-podman build -t localhost/dsh-vm:latest image/      # ~2 GB, a few minutes
+bin/dsh-vm build                                   # ~2.5 GB image, a few minutes
 ln -sf "$PWD/bin/dsh-vm" ~/.local/bin/dsh-vm
-mkdir -p ~/.claude/skills && cp -r skills/handoff-vm ~/.claude/skills/
+mkdir -p ~/.claude/skills && cp -r skills/handoff ~/.claude/skills/
 ```
 
+This installs the VM handoff as **the** `handoff` skill. If you already have the
+[cc_to_dsh](https://github.com/stansz/cc_to_dsh) `handoff` skill and want to keep it as a
+no-VM fallback, copy it to `handoff-local` first and rename it:
+
+```bash
+cp -r ~/.claude/skills/handoff ~/.claude/skills/handoff-local
+sed -i 's/^name: handoff$/name: handoff-local/' ~/.claude/skills/handoff-local/SKILL.md
+```
+
+and change its `description:` so it only triggers on "handoff-local" / "without a VM".
+
 The image bakes in the dsh profile from `image/` (bundles: base, headless, agent teams;
-model `deepseek-flash`, reasoning low). Edit `image/cordis.patch.yml` and rebuild to change it.
+model `deepseek-flash`, reasoning low). Edit `image/cordis.patch.yml`, or bump `DSH_VERSION`
+with `bin/dsh-vm build --build-arg DSH_VERSION=<version>`, then rebuild.
 
 ## Use
 
-In Claude Code: "hand this off in a vm" (or `/handoff-vm`). By hand:
+In Claude Code: "hand this off" (or `/handoff`). By hand:
 
 ```bash
 cd your-repo                         # clean tree, .handoff/plan.md written
@@ -70,6 +92,7 @@ dsh-vm run "Implement .handoff/plan.md exactly as written."   # prints the run d
 dsh-vm list
 dsh-vm apply ~/.cache/dsh-vm/runs/<run>   # replay changes into the repo (uncommitted)
 dsh-vm clean ~/.cache/dsh-vm/runs/<run>   # or: dsh-vm clean --all
+dsh-vm build                              # rebuild the image (new dsh, edited profile)
 ```
 
 | Variable | Default | |
@@ -79,6 +102,7 @@ dsh-vm clean ~/.cache/dsh-vm/runs/<run>   # or: dsh-vm clean --all
 | `DSH_VM_RUNTIME` | `krun` | `crun` runs it as a plain container, for debugging |
 | `DSH_VM_IMAGE` | `localhost/dsh-vm:latest` | |
 | `DSH_VM_RUNS` | `~/.cache/dsh-vm/runs` | Where run dirs go; `apply`/`clean` refuse anything else |
+| `DSH_VM_NPM_CACHE` | `dsh-vm-npm` | Podman volume for npm's download cache (`podman volume rm dsh-vm-npm` to reset) |
 
 ## Resources
 

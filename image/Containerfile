@@ -5,15 +5,22 @@ FROM registry.fedoraproject.org/fedora:45
 RUN dnf -y install --setopt=install_weak_deps=False \
       nodejs24 nodejs24-bin nodejs24-npm nodejs24-npm-bin \
       chromium git-core findutils procps-ng which diffutils \
+      ripgrep fd-find jq curl unzip tar gzip xz patch less file tree python3 \
+      gcc gcc-c++ make \
     && dnf clean all
 
-ARG DSH_VERSION=0.2.2-rc.1
-RUN npm install -g "@deepseek-ai/dsh@${DSH_VERSION}" && npm cache clean --force
+# dsh runs as root in the VM, so it can dnf install what a task needs. Under rootless podman
+# that root is your own unprivileged user on the host, behind the VM boundary, and files it
+# writes to /work come back owned by you. (sudo doesn't work under krun: setuid binaries don't
+# get root over virtiofs.) Chromium refuses to run as root without --no-sandbox; the VM is the
+# sandbox here.
+RUN echo 'CHROMIUM_FLAGS+=" --no-sandbox"' >> /etc/chromium/chromium.conf
 
-# dsh writes sessions next to its profiles, so DSH_HOME must be writable by the run's user
-# (podman --userns=keep-id runs as your host UID).
-ENV DSH_HOME=/opt/dsh HOME=/tmp/home
+ARG DSH_VERSION=0.2.2-rc.1
+RUN npm install -g "@deepseek-ai/dsh@${DSH_VERSION}" corepack && corepack enable \
+    && npm cache clean --force
+
+ENV DSH_HOME=/opt/dsh HOME=/root
 COPY package.json pnpm-workspace.yaml cordis.yml cordis.patch.yml /opt/dsh/profiles/headless/
-RUN mkdir -p /tmp/home && chmod -R a+rwX /opt/dsh /tmp/home
 
 WORKDIR /work

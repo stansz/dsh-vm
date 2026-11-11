@@ -1,6 +1,6 @@
 ---
-name: handoff-vm
-description: Like handoff, but dsh runs with full access inside a throwaway microVM (podman --runtime krun) on a clone of the repo, so it can use a browser, install npm packages and run anything. Write .handoff/plan.md, run it with dsh-vm in the background, verify the run dir, report, and apply the changes to the repo when the user approves. Use when the user says "hand off in a vm", "handoff-vm", "run it in a microvm", "dsh-vm", or asks for a handoff that needs a browser or full access.
+name: handoff
+description: Write an execution spec to .handoff/plan.md, run it with dsh (DeepSeek Harness) with full access inside a throwaway microVM on a clone of the repo, verify and review the result, report, and apply the changes to the repo when the user approves. Use when the user says "hand off" or "hand it off to dsh", "send it to the executor", "run it in dsh", "use dsh", "use deepseek", "have deepseek/dsh do it", "run it in a vm", "dsh-vm", or otherwise asks to stop planning and let DeepSeek implement the work. (handoff-local runs dsh on the host without a VM.)
 allowed-tools: Read, Glob, Grep, Write, Bash(dsh-vm:*), Bash(git rev-parse:*), Bash(git status:*), Bash(git diff:*), Bash(git -C:*)
 ---
 
@@ -9,9 +9,12 @@ Do not implement anything yourself. You plan, the executor implements, you verif
 EXECUTOR: dsh-vm run (dsh --profile headless --permission-mode danger-full-access, in a microVM)
 
 The VM sees only a clone of the repo in a run dir, the DeepSeek key and the network. Inside
-it dsh has no sandbox and no approvals: it may install npm packages (not system packages: it runs as your UID, not root), run headless Chromium
+it dsh runs as root with no sandbox and no approvals: it may `dnf install` system packages,
+install npm/pnpm/yarn packages, compile native code (gcc, make), run headless Chromium
 (`chromium-browser`), and use the network. It has no SSH keys, no gh token and no git
 remote, so it cannot push. Your real repo is untouched until step 6.
+
+If `dsh-vm` is not installed or podman/krun is unavailable, say so and offer handoff-local.
 
 ## Cache discipline
 
@@ -75,7 +78,8 @@ Write `.handoff/plan.md` with exactly these sections:
     or anything touching the same files stay sequential; delegation overhead is not free.
 - **Constraints** always includes: do not commit, push, or switch branches; do not touch
   files outside **Files to touch** except `.handoff/report.md`. Installing dependencies
-  (`npm ci`) and temporary files outside the repo are fine: the VM is thrown away.
+  (`npm ci`, `dnf install`) and temporary files outside the repo are fine: the VM is thrown
+  away.
 - The clone has no `node_modules` or other ignored files. If Acceptance needs them, make
   installing them (e.g. `npm ci`) the first step.
 - Browser checks: the VM has `chromium-browser` (headless) and 2 GB of RAM. Ask for one
