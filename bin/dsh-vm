@@ -20,6 +20,10 @@ RUNS=${DSH_VM_RUNS:-${XDG_CACHE_HOME:-$HOME/.cache}/dsh-vm/runs}
 # npm's download cache, kept between runs so `npm ci` doesn't fetch everything again. npm checks
 # every package's hash, so one run can't poison it for the next.
 NPM_CACHE=${DSH_VM_NPM_CACHE:-dsh-vm-npm}
+# ~/.cache, kept between runs so Playwright/Puppeteer browsers (~700 MB) and corepack's pnpm/yarn
+# download once per version. A run could tamper with it, but the next run gets nothing the
+# earlier one didn't already have (the same key and network).
+HOME_CACHE=${DSH_VM_CACHE:-dsh-vm-cache}
 
 die() { echo "dsh-vm: $*" >&2; exit 1; }
 
@@ -49,7 +53,7 @@ cmd_run() {
   local status=0 started=$SECONDS
   podman run --rm --runtime "$RUNTIME" --memory "$MEMORY" --cpus "$CPUS" \
     --timeout "$((TIMEOUT_MIN * 60))" --name "dsh-vm-$(basename -- "$dir")" \
-    -e DEEPSEEK_API_KEY -v "$dir:/work:Z" -v "$NPM_CACHE:/root/.npm" -w /work "$IMAGE" \
+    -e DEEPSEEK_API_KEY -v "$dir:/work:Z" -v "$NPM_CACHE:/root/.npm" -v "$HOME_CACHE:/root/.cache" -w /work "$IMAGE" \
     dsh --profile headless --permission-mode danger-full-access "$prompt" \
     >"$dir/.handoff/last-run.log" 2>&1 || status=$?
   if (( status != 0 && SECONDS - started >= TIMEOUT_MIN * 60 )); then

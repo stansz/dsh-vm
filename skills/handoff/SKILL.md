@@ -83,7 +83,10 @@ Write `.handoff/plan.md` with exactly these sections:
 - The clone has no `node_modules` or other ignored files. If Acceptance needs them, make
   installing them (e.g. `npm ci`) the first step.
 - Browser checks: the VM has `chromium-browser` (headless) and 2 GB of RAM. Ask for one
-  browser at a time.
+  browser at a time. If the project already uses Playwright or Puppeteer, use its own setup
+  and scripts (`npx playwright install chromium` is fine; browser downloads are cached between
+  runs). For a quick one-off check in a project without one, point it at the system Chromium:
+  `executablePath: '/usr/lib64/chromium-browser/chromium-browser'`.
 
 Then check the **Acceptance** commands, before the executor spends anything on them. The
 code does not exist yet, so this tests the command, not the result:

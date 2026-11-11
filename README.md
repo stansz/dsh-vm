@@ -29,7 +29,7 @@ Claude Code (host) ── reviews the diff in the run dir, runs Acceptance there
 | A clone of the repo (with `.handoff/`) | Your real checkout and its `.git` |
 | `DEEPSEEK_API_KEY` | SSH keys, `gh` token, any git remote: **it cannot push** |
 | The network (DeepSeek API, npm, web) | Your home directory and the rest of the host |
-| The npm download cache (a podman volume) | The host kernel (libkrun gives the VM its own) |
+| The npm cache and `~/.cache` (podman volumes) | The host kernel (libkrun gives the VM its own) |
 
 The clone uses `--no-hardlinks`, so the VM can't modify your repo's object files through shared
 inodes. The key is the one secret inside; use a spend-capped key.
@@ -44,6 +44,10 @@ setuid binaries don't get root.) Chromium runs with `--no-sandbox`, since the VM
 Fedora 45 with: Node 24 (npm, plus pnpm and yarn via corepack), dsh, git, headless Chromium,
 gcc/g++/make for native modules, python3, ripgrep, fd, jq, curl, unzip/tar/xz, patch, less,
 file, tree. Anything else: dsh can `dnf install` it during the run.
+
+Browser automation: Playwright and Puppeteer work in the VM, with their own browser download
+(kept in the `~/.cache` volume, so it happens once per version) or pointed at the system Chromium
+(`executablePath: '/usr/lib64/chromium-browser/chromium-browser'`).
 
 ## Why libkrun, not Firecracker
 
@@ -104,6 +108,7 @@ dsh-vm build                              # rebuild the image (new dsh, edited p
 | `DSH_VM_IMAGE` | `localhost/dsh-vm:latest` | |
 | `DSH_VM_RUNS` | `~/.cache/dsh-vm/runs` | Where run dirs go; `apply`/`clean` refuse anything else |
 | `DSH_VM_NPM_CACHE` | `dsh-vm-npm` | Podman volume for npm's download cache (`podman volume rm dsh-vm-npm` to reset) |
+| `DSH_VM_CACHE` | `dsh-vm-cache` | Podman volume for `~/.cache`: Playwright/Puppeteer browsers, corepack's pnpm/yarn (`podman volume rm dsh-vm-cache` to reset) |
 
 ## Updating
 
@@ -118,7 +123,7 @@ dsh-vm build                              # rebuild the image (new dsh, edited p
 | libkrun / crun-krun | Host packages: `sudo dnf upgrade` |
 
 `dsh-vm build` removes the dangling image layers it leaves behind. To reset the npm cache:
-`podman volume rm dsh-vm-npm`.
+`podman volume rm dsh-vm-npm`; Playwright browsers and other caches: `podman volume rm dsh-vm-cache`.
 
 ## Resources
 
