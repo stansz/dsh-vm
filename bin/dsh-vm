@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# dsh-vm: run a dsh handoff inside a microVM, on a throwaway clone of the repo.
+#
+#   dsh-vm run "<prompt>"   clone the repo (plus .handoff/) and run dsh in a VM; prints the run dir
+#   dsh-vm apply <run-dir>  copy the run's changes into the repo as uncommitted changes
+#   dsh-vm clean <run-dir>  delete a run (or --all)
+#   dsh-vm list             list runs
+#
+# Inside the VM dsh has full access (no sandbox, no approvals). The VM only sees the clone,
+# the API key and the network: no SSH keys, no gh token, no git remote, so it cannot push.
+set -euo pipefail
+
+IMAGE=${DSH_VM_IMAGE:-localhost/dsh-vm:latest}
+RUNTIME=${DSH_VM_RUNTIME:-krun}          # set to runc/crun to run as a plain container
+MEMORY=${DSH_VM_MEMORY:-2g}
+CPUS=${DSH_VM_CPUS:-2}
+RUNS=${DSH_VM_RUNS:-${XDG_CACHE_HOME:-$HOME/.cache}/dsh-vm/runs}
+
+die() { echo "dsh-vm: $*" >&2; exit 1; }
+
+# A run dir must sit directly inside $RUNS, so apply/clean never touch anything else.
+run_dir() {
+  local dir
+  dir=$(realpath -e -- "${1:?run dir required}") || die "no such run: $1"
+  [[ $(dirname -- "$dir") == "$(realpath -m -- "$RUNS")" ]] || die "not a run dir under $RUNS: $1"
+  printf '%s\n' "$dir"
+}
+
+cmd_run() {
+  local prompt=${1:?prompt required}
+  [[ -n ${DEEPSEEK_API_KEY:-} ]] || die "DEEPSEEK_API_KEY is not set"
+  local repo; repo=$(git rev-parse --show-toplevel) || die "not in a git repo"
+  [[ -f $repo/.handoff/plan.md ]] || die "$repo/.handoff/plan.md not found"
+
+  local dir; dir="$RUNS/$(basename -- "$repo")-$(date +%Y%m%d-%H%M%S)"
+  mkdir -p -- "$RUNS"
+  # --no-hardlinks: the VM must not be able to reach the repo's object files.
+  git clone -q --no-hardlinks -- "$repo" "$dir"
+  git -C "$dir" remote remove origin
+  cp -a -- "$repo/.handoff/." "$dir/.handoff/"
+  rm -f -- "$dir/.handoff/report.md" "$dir/.handoff/last-run.log"
+
+  echo "$dir"
+  local status=0
+  podman run --rm --runtime "$RUNTIME" --memory "$MEMORY" --cpus "$CPUS" \
+    --userns=keep-id --name "dsh-vm-$(basename -- "$dir")" \
+    -e DEEPSEEK_API_KEY -v "$dir:/work:Z" -w /work "$IMAGE" \
+    dsh --profile headless --permission-mode danger-full-access "$prompt" \
+    >"$dir/.handoff/last-run.log" 2>&1 || status=$?
+  echo "dsh-vm: exited $status; log in $dir/.handoff/last-run.log"
+  return "$status"
+}
+
+cmd_apply() {
+  local dir; dir=$(run_dir "${1:-}")
+  local repo; repo=$(git rev-parse --show-toplevel) || die "not in a git repo"
+  [[ $(git -C "$dir" rev-parse HEAD) == $(git -C "$repo" rev-parse HEAD) ]] \
+    || die "repo HEAD moved since the run; apply by hand"
+  [[ -z $(git -C "$repo" status --porcelain -- . ':(exclude).handoff') ]] \
+    || die "repo has uncommitted changes; commit or stash first"
+  # Stage everything in the clone (respecting .gitignore) and replay it as unstaged changes;
+  # new files land untracked, as if dsh had run in the repo itself.
+  git -C "$dir" add -A
+  git -C "$dir" diff --cached --binary HEAD -- . ':(exclude).handoff' | git -C "$repo" apply --allow-empty
+  for f in report.md last-run.log; do
+    [[ -f $dir/.handoff/$f ]] && cp -- "$dir/.handoff/$f" "$repo/.handoff/$f"
+  done
+  git -C "$repo" status --short
+}
+
+cmd_clean() {
+  if [[ ${1:-} == --all ]]; then
+    rm -rf -- "${RUNS:?}"/*
+  else
+    rm -rf -- "$(run_dir "${1:-}")"
+  fi
+}
+
+cmd_list() { ls -1 -- "$RUNS" 2>/dev/null || true; }
+
+case ${1:-} in
+  run|apply|clean|list) cmd=$1; shift; "cmd_$cmd" "$@" ;;
+  *) sed -n '2,7s/^# \{0,1\}//p' "$0"; exit 2 ;;
+esac

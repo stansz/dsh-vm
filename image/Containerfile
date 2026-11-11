@@ -1,0 +1,19 @@
+# The handoff VM: dsh plus the tools a handoff may need (git, Node 24, headless Chromium).
+# Runs under podman --runtime krun, so each handoff gets its own kernel.
+FROM registry.fedoraproject.org/fedora:45
+
+RUN dnf -y install --setopt=install_weak_deps=False \
+      nodejs24 nodejs24-bin nodejs24-npm nodejs24-npm-bin \
+      chromium git-core findutils procps-ng which diffutils \
+    && dnf clean all
+
+ARG DSH_VERSION=0.2.2-rc.1
+RUN npm install -g "@deepseek-ai/dsh@${DSH_VERSION}" && npm cache clean --force
+
+# dsh writes sessions next to its profiles, so DSH_HOME must be writable by the run's user
+# (podman --userns=keep-id runs as your host UID).
+ENV DSH_HOME=/opt/dsh HOME=/tmp/home
+COPY package.json pnpm-workspace.yaml cordis.yml cordis.patch.yml /opt/dsh/profiles/headless/
+RUN mkdir -p /tmp/home && chmod -R a+rwX /opt/dsh /tmp/home
+
+WORKDIR /work

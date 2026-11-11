@@ -1,0 +1,13 @@
+# Your patch layer for this dsh profile, applied after every bundle layer:
+# a top-level YAML array of loader patch entries (id-targeted config
+# overrides, disables, and insert lists; `!!js` expressions allowed).
+#
+# Overrides replace a row's whole config, so every key is restated.
+# Reasoning levels: off, low, high, max. Low is enough because Claude Code
+# reviews the full diff against the plan after every handoff.
+- id: agent-default-model
+  name: "@deepseek-ai/dsh-agent-default-model"
+  config:
+    provider: deepseek-official
+    model: deepseek-flash
+    reasoningEffort: low
