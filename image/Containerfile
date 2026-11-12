@@ -16,6 +16,14 @@ RUN dnf -y install --setopt=install_weak_deps=False \
 # sandbox here.
 RUN echo 'CHROMIUM_FLAGS+=" --no-sandbox"' >> /etc/chromium/chromium.conf
 
+# libkrun's TSI networking has a kernel bug: getsockopt(IPPROTO_IPV6, IPV6_V6ONLY) on some TSI
+# stream sockets calls a null function pointer and oopses the guest kernel. Chromium's network
+# thread hits it now and then, which kills that thread and hangs the browser. no-ipv6 makes
+# socket(AF_INET6, ...) fail with EAFNOSUPPORT, as on a machine without IPv6, so everything in the
+# VM falls back to IPv4 and never reaches that path. dsh-vm starts dsh through it.
+COPY no-ipv6.c /tmp/no-ipv6.c
+RUN gcc -O2 -o /usr/local/bin/no-ipv6 /tmp/no-ipv6.c && rm /tmp/no-ipv6.c
+
 ARG DSH_VERSION=0.2.2-rc.1
 RUN npm install -g "@deepseek-ai/dsh@${DSH_VERSION}" corepack && corepack enable \
     && npm cache clean --force

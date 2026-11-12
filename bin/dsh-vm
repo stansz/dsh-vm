@@ -55,7 +55,7 @@ cmd_run() {
   podman run --rm --runtime "$RUNTIME" --memory "$MEMORY" --cpus "$CPUS" \
     --timeout "$((TIMEOUT_MIN * 60))" --name "dsh-vm-$(basename -- "$dir")" \
     -e DEEPSEEK_API_KEY -v "$dir:/work:Z" -v "$NPM_CACHE:/root/.npm" -v "$HOME_CACHE:/root/.cache" -w /work "$IMAGE" \
-    dsh --profile headless --permission-mode danger-full-access "$prompt" \
+    no-ipv6 dsh --profile headless --permission-mode danger-full-access "$prompt" \
     >"$dir/.handoff/last-run.log" 2>&1 || status=$?
   if (( status != 0 && SECONDS - started >= TIMEOUT_MIN * 60 )); then
     echo "dsh-vm: timed out after $TIMEOUT_MIN minutes; the VM was stopped" \

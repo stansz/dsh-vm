@@ -56,6 +56,11 @@ because it shares a host folder over **virtiofs** (Firecracker has block devices
 **rootless** with no TAP/NAT setup (its TSI networking proxies guest sockets through the host),
 and takes an ordinary container image via `podman --runtime krun`.
 
+TSI has a guest-kernel bug: `getsockopt(IPPROTO_IPV6, IPV6_V6ONLY)` on some TSI stream sockets
+oopses the kernel, which Chromium's network thread hits now and then and hangs the browser. So
+dsh-vm starts dsh through `no-ipv6` (built from `image/no-ipv6.c`), a seccomp wrapper that makes
+`socket(AF_INET6, ...)` fail as on a host without IPv6; everything in the VM uses IPv4.
+
 ## Requirements
 
 - Linux with KVM (`/dev/kvm`), rootless Podman, and `crun-krun` (Fedora: `sudo dnf install crun-krun`)
