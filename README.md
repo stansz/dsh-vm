@@ -94,6 +94,7 @@ In Claude Code: "hand this off" (or `/handoff`). By hand:
 cd your-repo                         # clean tree, .handoff/plan.md written
 dsh-vm run "Implement .handoff/plan.md exactly as written."   # prints the run dir first
 dsh-vm list
+dsh-vm log                                # follow the newest run's log live (Ctrl+C stops watching)
 dsh-vm apply ~/.cache/dsh-vm/runs/<run>   # replay changes into the repo (uncommitted)
 dsh-vm clean ~/.cache/dsh-vm/runs/<run>   # or: dsh-vm clean --all
 dsh-vm build                              # rebuild the image (new dsh, edited profile)

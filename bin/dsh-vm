@@ -5,6 +5,7 @@
 #   dsh-vm apply <run-dir>  copy the run's changes into the repo as uncommitted changes
 #   dsh-vm clean <run-dir>  delete a run (or --all)
 #   dsh-vm list             list runs
+#   dsh-vm log [run-dir]    follow a run's log live (default: the newest run); Ctrl+C stops watching
 #   dsh-vm build            (re)build the image, e.g. after editing image/ or to update dsh
 #
 # Inside the VM dsh has full access (no sandbox, no approvals). The VM only sees the clone,
@@ -91,12 +92,25 @@ cmd_clean() {
 
 cmd_list() { ls -1 -- "$RUNS" 2>/dev/null || true; }
 
+cmd_log() {
+  local dir
+  if [[ -n ${1:-} ]]; then
+    dir=$(run_dir "$1")
+  else
+    dir=$(ls -1td -- "$RUNS"/*/ 2>/dev/null | head -1) || true
+    [[ -n $dir ]] || die "no runs in $RUNS"
+    dir=${dir%/}
+  fi
+  echo "== $dir/.handoff/last-run.log (Ctrl+C stops watching; the run keeps going)" >&2
+  tail -n +1 -F -- "$dir/.handoff/last-run.log"
+}
+
 cmd_build() {
   local here; here=$(dirname -- "$(realpath -- "$0")")
   podman build --pull=newer -t "$IMAGE" "$@" "$here/../image" && podman image prune -f >/dev/null
 }
 
 case ${1:-} in
-  run|apply|clean|list|build) cmd=$1; shift; "cmd_$cmd" "$@" ;;
-  *) sed -n '2,8s/^# \{0,1\}//p' "$0"; exit 2 ;;
+  run|apply|clean|list|log|build) cmd=$1; shift; "cmd_$cmd" "$@" ;;
+  *) sed -n '2,9s/^# \{0,1\}//p' "$0"; exit 2 ;;
 esac

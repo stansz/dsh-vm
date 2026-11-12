@@ -113,8 +113,9 @@ prints its path first, and writes dsh's output to `<run dir>/.handoff/last-run.l
 
     dsh-vm run "Implement .handoff/plan.md exactly as written. Before you finish, write .handoff/report.md listing files changed, commands run and their results, anything you could not do, and the exact next step. If a step is wrong or impossible, stop and report instead of improvising. Do not commit, push, or switch branches. If the plan's Parallel work section lists workstreams, delegate each one to a teammate or subagent with your agent-team or subagent tools, give each only its own files, wait for all of them, then run the integration step yourself; say in the report which workstreams were delegated."
 
-Tell the user the executor is running in a microVM. Do not poll; you will be notified when
-it exits.
+Tell the user the executor is running in a microVM, and that they can watch it live in a
+terminal with `dsh-vm log` (Ctrl+C stops watching, not the run). Do not poll; you will be
+notified when it exits.
 
 ## 4. Verify and review (read-only)
 
